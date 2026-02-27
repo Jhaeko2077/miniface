@@ -61,3 +61,30 @@ Swagger:
 - Usa la **Connection string** del proyecto (Database → Connection string).
 - En producción evita usar el usuario `postgres` y rota credenciales periódicamente.
 - Este proyecto crea tablas al iniciar (`Base.metadata.create_all`). Para producción real, migra con Alembic.
+
+## 6) Deploy en Railway
+
+Este repositorio ya incluye configuración para Railway:
+
+- `railway.toml` con comando de arranque y healthcheck.
+- `Procfile` como fallback para plataformas compatibles.
+
+### Variables en Railway
+
+Configura estas variables en **Railway → Variables**:
+
+- `DATABASE_URL`
+- `SECRET_KEY`
+- `ALGORITHM` (opcional, por defecto `HS256`)
+- `ACCESS_TOKEN_EXPIRE_MINUTES` (opcional)
+- `MEDIA_DIR` (opcional, por defecto `uploads`)
+
+> Nota: Railway inyecta `PORT` automáticamente; el comando de arranque ya lo usa (`--port ${PORT:-8000}`).
+
+### Pasos rápidos
+
+1. Crea un proyecto en Railway y conecta este repo.
+2. Añade las variables de entorno.
+3. Haz deploy.
+4. Verifica `GET /health` y luego abre `/docs`.
+
