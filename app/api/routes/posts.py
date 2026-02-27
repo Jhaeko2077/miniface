@@ -1,7 +1,7 @@
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -50,3 +50,26 @@ def create_post(
 @router.get("", response_model=list[PostOut])
 def list_posts(db: Session = Depends(get_db)) -> list[Post]:
     return list(db.scalars(select(Post).order_by(Post.created_at.desc())))
+
+
+@router.delete("/{post_id}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
+def delete_post(
+    post_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Response:
+    post = db.get(Post, post_id)
+    if post is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
+    if post.owner_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions")
+
+    if post.image_url:
+        image_relative = post.image_url.lstrip("/")
+        image_path = Path(image_relative)
+        if image_path.exists() and image_path.is_file():
+            image_path.unlink(missing_ok=True)
+
+    db.delete(post)
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

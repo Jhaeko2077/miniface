@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -34,3 +35,13 @@ def on_startup() -> None:
 @app.get("/health")
 def health_check() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/", include_in_schema=False)
+def serve_miniface() -> FileResponse:
+    return FileResponse("miniface.html")
+
+
+@app.get("/miniface.html", include_in_schema=False)
+def serve_miniface_html() -> FileResponse:
+    return FileResponse("miniface.html")

@@ -624,11 +624,17 @@
     </div>
 
     <div class="sidebar-section db-info">
-      <div class="db-info-title">🗄️ Conectar Base de Datos</div>
-      <p>Este proyecto usa <code>localStorage</code> por ahora. Para conectar un backend, reemplaza las funciones:</p><br>
-      <p>• <code>loadPosts()</code> → fetch API</p>
-      <p>• <code>savePost()</code> → POST /api/posts</p>
-      <p>• <code>deletePost()</code> → DELETE /api/posts/:id</p>
+      <div class="db-info-title">🔐 Conexión al backend</div>
+      <p style="margin-bottom:0.75rem">Inicia sesión para publicar con tu API de FastAPI.</p>
+      <input id="authEmail" type="email" placeholder="Email" style="width:100%;margin-bottom:0.5rem;padding:0.45rem;border:1px solid var(--border);border-radius:8px;background:white" />
+      <input id="authUsername" type="text" placeholder="Username (solo registro)" style="width:100%;margin-bottom:0.5rem;padding:0.45rem;border:1px solid var(--border);border-radius:8px;background:white" />
+      <input id="authPassword" type="password" placeholder="Password" style="width:100%;margin-bottom:0.5rem;padding:0.45rem;border:1px solid var(--border);border-radius:8px;background:white" />
+      <div style="display:flex; gap:0.4rem; flex-wrap:wrap">
+        <button class="icon-btn" onclick="login()">Entrar</button>
+        <button class="icon-btn" onclick="register()">Registro</button>
+        <button class="icon-btn" onclick="logout()">Salir</button>
+      </div>
+      <p id="authStatus" style="margin-top:0.75rem;font-size:0.8rem;color:var(--muted)">No autenticado</p>
     </div>
   </aside>
 
@@ -703,58 +709,14 @@
 </div>
 
 <script>
-  // ═══════════════════════════════════════════════
-  //  CAPA DE DATOS — reemplaza estas funciones
-  //  con llamadas a tu API/base de datos
-  // ═══════════════════════════════════════════════
-
-  const DB_KEY = 'nexo_posts_v1';
+  const TOKEN_KEY = 'nexo_token_v1';
   const LIKES_KEY = 'nexo_likes_v1';
 
-  /**
-   * CARGAR posts
-   * Para conectar a tu backend:
-   *   const res = await fetch('/api/posts');
-   *   return await res.json();
-   */
-  function loadPosts() {
-    try {
-      return JSON.parse(localStorage.getItem(DB_KEY) || '[]');
-    } catch { return []; }
-  }
-
-  /**
-   * GUARDAR posts
-   * Para conectar a tu backend:
-   *   await fetch('/api/posts', { method:'POST', body: JSON.stringify(post) });
-   */
-  function savePosts(posts) {
-    localStorage.setItem(DB_KEY, JSON.stringify(posts));
-  }
-
-  function loadLikes() {
-    try {
-      return JSON.parse(localStorage.getItem(LIKES_KEY) || '{}');
-    } catch { return {}; }
-  }
-
-  function saveLikes(likes) {
-    localStorage.setItem(LIKES_KEY, JSON.stringify(likes));
-  }
-
-  // ═══════════════════════════════════════════════
-  //  ESTADO DE LA APP
-  // ═══════════════════════════════════════════════
-
-  let posts = loadPosts();
+  let posts = [];
   let likes = loadLikes();
   let currentImageData = null;
+  let currentUser = null;
   let openMenuId = null;
-  let likesGiven = 0;
-
-  // ═══════════════════════════════════════════════
-  //  IMAGEN — UPLOAD & PREVIEW
-  // ═══════════════════════════════════════════════
 
   const imageInput = document.getElementById('imageInput');
   const imagePreview = document.getElementById('imagePreview');
@@ -771,16 +733,164 @@
     imageUploadZone.classList.add('drag-over');
   });
 
-  imageUploadZone.addEventListener('dragleave', () => {
-    imageUploadZone.classList.remove('drag-over');
-  });
-
+  imageUploadZone.addEventListener('dragleave', () => imageUploadZone.classList.remove('drag-over'));
   imageUploadZone.addEventListener('drop', e => {
     e.preventDefault();
     imageUploadZone.classList.remove('drag-over');
     const file = e.dataTransfer.files[0];
     if (file && file.type.startsWith('image/')) handleImageFile(file);
   });
+
+  function loadLikes() {
+    try { return JSON.parse(localStorage.getItem(LIKES_KEY) || '{}'); } catch { return {}; }
+  }
+  function saveLikes() { localStorage.setItem(LIKES_KEY, JSON.stringify(likes)); }
+  function getToken() { return localStorage.getItem(TOKEN_KEY); }
+
+  async function api(path, options = {}) {
+    const headers = new Headers(options.headers || {});
+    const token = getToken();
+    if (token) headers.set('Authorization', `Bearer ${token}`);
+    const res = await fetch(path, { ...options, headers });
+    if (!res.ok) {
+      let detail = `Error ${res.status}`;
+      try { const data = await res.json(); detail = data.detail || detail; } catch {}
+      throw new Error(detail);
+    }
+    if (res.status === 204) return null;
+    return res.json();
+  }
+
+  async function refreshPosts() {
+    const data = await api('/api/posts');
+    posts = data.map(p => ({
+      id: p.id,
+      author: (currentUser && currentUser.id === p.owner_id) ? currentUser.username : `Usuario #${p.owner_id}`,
+      text: p.content,
+      image: p.image_url,
+      timestamp: p.created_at,
+      likes: Number(likes[p.id] || 0),
+      owner_id: p.owner_id
+    }));
+    renderFeed();
+    updateStats();
+  }
+
+  async function createPost() {
+    const text = document.getElementById('postText').value.trim();
+    if (!text && !currentImageData && !imageInput.files[0]) return showToast('Escribe algo o adjunta una imagen');
+    if (!getToken()) return showToast('Primero inicia sesión');
+
+    const form = new FormData();
+    form.append('content', text || '');
+    if (imageInput.files[0]) form.append('image', imageInput.files[0]);
+
+    try {
+      await api('/api/posts', { method: 'POST', body: form });
+      document.getElementById('postText').value = '';
+      removeImage();
+      await refreshPosts();
+      showToast('¡Post publicado! ✓');
+    } catch (err) {
+      showToast(err.message);
+    }
+  }
+
+  async function deletePost(id) {
+    if (!getToken()) return showToast('No autenticado');
+    try {
+      await api(`/api/posts/${id}`, { method: 'DELETE' });
+      await refreshPosts();
+      showToast('Post eliminado');
+    } catch (err) {
+      showToast(err.message);
+    }
+    closeMenus();
+  }
+
+  function toggleLike(id) {
+    likes[id] = likes[id] ? 0 : 1;
+    saveLikes();
+    const btn = document.getElementById('likeBtn-' + id);
+    const cnt = document.getElementById('likeCnt-' + id);
+    if (btn) btn.className = 'action-btn' + (likes[id] ? ' liked' : '');
+    if (cnt) cnt.textContent = likes[id] ? '1' : '';
+    updateStats();
+  }
+
+  async function register() {
+    const email = document.getElementById('authEmail').value.trim();
+    const username = document.getElementById('authUsername').value.trim();
+    const password = document.getElementById('authPassword').value;
+    if (!email || !username || !password) return showToast('Completa email, username y password');
+
+    try {
+      await api('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, username, password })
+      });
+      showToast('Usuario registrado. Ahora inicia sesión.');
+    } catch (err) {
+      showToast(err.message);
+    }
+  }
+
+  async function login() {
+    const email = document.getElementById('authEmail').value.trim();
+    const password = document.getElementById('authPassword').value;
+    if (!email || !password) return showToast('Completa email y password');
+
+    const payload = new URLSearchParams();
+    payload.append('username', email);
+    payload.append('password', password);
+
+    try {
+      const data = await api('/api/auth/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: payload
+      });
+      localStorage.setItem(TOKEN_KEY, data.access_token);
+      await loadCurrentUser();
+      await refreshPosts();
+      showToast('Sesión iniciada');
+    } catch (err) {
+      showToast(err.message);
+    }
+  }
+
+  function logout() {
+    localStorage.removeItem(TOKEN_KEY);
+    currentUser = null;
+    updateAuthUi();
+    showToast('Sesión cerrada');
+  }
+
+  async function loadCurrentUser() {
+    if (!getToken()) {
+      currentUser = null;
+      return updateAuthUi();
+    }
+    try {
+      currentUser = await api('/api/users/me');
+    } catch {
+      currentUser = null;
+      localStorage.removeItem(TOKEN_KEY);
+    }
+    updateAuthUi();
+  }
+
+  function updateAuthUi() {
+    const status = document.getElementById('authStatus');
+    const name = currentUser ? currentUser.username : 'Tu Nombre';
+    status.textContent = currentUser ? `Conectado como ${currentUser.username}` : 'No autenticado';
+    document.querySelector('.sidebar-username').textContent = name;
+    document.querySelector('.sidebar-handle').textContent = currentUser ? `@${currentUser.username}` : '@tunombre';
+    document.querySelectorAll('.sidebar-avatar, .header-avatar, .composer-avatar').forEach(el => {
+      el.textContent = name.slice(0, 1).toUpperCase();
+    });
+  }
 
   function handleImageFile(file) {
     const reader = new FileReader();
@@ -800,226 +910,89 @@
     imageUploadZone.style.display = 'block';
   }
 
-  // ═══════════════════════════════════════════════
-  //  CREAR POST
-  // ═══════════════════════════════════════════════
-
-  function createPost() {
-    const text = document.getElementById('postText').value.trim();
-    if (!text && !currentImageData) {
-      showToast('Escribe algo o adjunta una imagen');
-      return;
-    }
-
-    const post = {
-      id: Date.now().toString(),
-      author: 'Tu Nombre',
-      handle: '@tunombre',
-      text,
-      image: currentImageData,
-      timestamp: new Date().toISOString(),
-      likes: 0
-    };
-
-    posts.unshift(post);
-    savePosts(posts);
-
-    // Limpiar compositor
-    document.getElementById('postText').value = '';
-    removeImage();
-
-    renderFeed();
-    updateStats();
-    showToast('¡Post publicado! ✓');
-  }
-
-  // ═══════════════════════════════════════════════
-  //  LIKE
-  // ═══════════════════════════════════════════════
-
-  function toggleLike(id) {
-    const post = posts.find(p => p.id === id);
-    if (!post) return;
-
-    if (likes[id]) {
-      post.likes = Math.max(0, post.likes - 1);
-      delete likes[id];
-    } else {
-      post.likes++;
-      likes[id] = true;
-    }
-
-    savePosts(posts);
-    saveLikes(likes);
-    updateStats();
-
-    // Actualizar solo el botón sin re-renderizar todo
-    const btn = document.getElementById('likeBtn-' + id);
-    const cnt = document.getElementById('likeCnt-' + id);
-    if (btn) btn.className = 'action-btn' + (likes[id] ? ' liked' : '');
-    if (cnt) cnt.textContent = post.likes > 0 ? post.likes : '';
-  }
-
-  // ═══════════════════════════════════════════════
-  //  ELIMINAR POST
-  // ═══════════════════════════════════════════════
-
-  function deletePost(id) {
-    posts = posts.filter(p => p.id !== id);
-    delete likes[id];
-    savePosts(posts);
-    saveLikes(likes);
-    renderFeed();
-    updateStats();
-    showToast('Post eliminado');
-    closeMenus();
-  }
-
-  // ═══════════════════════════════════════════════
-  //  MENÚ CONTEXTUAL
-  // ═══════════════════════════════════════════════
-
   function toggleMenu(id, e) {
     e.stopPropagation();
-    if (openMenuId === id) {
-      closeMenus();
-    } else {
-      closeMenus();
-      openMenuId = id;
-      document.getElementById('menu-' + id).style.display = 'block';
-    }
+    if (openMenuId === id) return closeMenus();
+    closeMenus();
+    openMenuId = id;
+    document.getElementById('menu-' + id).style.display = 'block';
   }
-
   function closeMenus() {
     document.querySelectorAll('.dropdown-menu').forEach(m => m.style.display = 'none');
     openMenuId = null;
   }
-
   document.addEventListener('click', closeMenus);
-
-  // ═══════════════════════════════════════════════
-  //  TIEMPO RELATIVO
-  // ═══════════════════════════════════════════════
 
   function timeAgo(isoString) {
     const diff = (Date.now() - new Date(isoString)) / 1000;
-    if (diff < 60)  return 'Ahora mismo';
-    if (diff < 3600) return `Hace ${Math.floor(diff/60)} min`;
-    if (diff < 86400) return `Hace ${Math.floor(diff/3600)} h`;
-    if (diff < 604800) return `Hace ${Math.floor(diff/86400)} d`;
-    return new Date(isoString).toLocaleDateString('es-ES', { day:'numeric', month:'short' });
+    if (diff < 60) return 'Ahora mismo';
+    if (diff < 3600) return `Hace ${Math.floor(diff / 60)} min`;
+    if (diff < 86400) return `Hace ${Math.floor(diff / 3600)} h`;
+    return new Date(isoString).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
   }
-
-  // ═══════════════════════════════════════════════
-  //  MODAL IMAGEN
-  // ═══════════════════════════════════════════════
 
   function openModal(src) {
     document.getElementById('modalImg').src = src;
     document.getElementById('imgModal').style.display = 'flex';
     document.body.style.overflow = 'hidden';
   }
-
   function closeModal() {
     document.getElementById('imgModal').style.display = 'none';
     document.body.style.overflow = '';
   }
 
-  // ═══════════════════════════════════════════════
-  //  RENDER
-  // ═══════════════════════════════════════════════
-
   function renderFeed() {
     const feed = document.getElementById('feed');
-
-    if (posts.length === 0) {
-      feed.innerHTML = `
-        <div class="empty-state">
-          <div class="empty-icon">✏️</div>
-          <div class="empty-title">Nada que mostrar aún</div>
-          <p>¡Sé el primero en publicar algo!</p>
-        </div>`;
+    if (!posts.length) {
+      feed.innerHTML = `<div class="empty-state"><div class="empty-icon">✏️</div><div class="empty-title">Nada que mostrar aún</div><p>Crea un post desde el compositor.</p></div>`;
       return;
     }
 
     feed.innerHTML = posts.map((post, i) => {
       const isLiked = !!likes[post.id];
-      const initials = post.author.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
-      return `
-      <article class="post-card" style="animation-delay:${Math.min(i,5)*0.05}s">
+      const initials = post.author.slice(0, 2).toUpperCase();
+      const canDelete = currentUser && currentUser.id === post.owner_id;
+      return `<article class="post-card" style="animation-delay:${Math.min(i,5)*0.05}s">
         <div class="post-header">
           <div class="post-avatar">${initials}</div>
-          <div class="post-meta">
-            <div class="post-author">${escHtml(post.author)}</div>
-            <div class="post-time">${timeAgo(post.timestamp)}</div>
-          </div>
+          <div class="post-meta"><div class="post-author">${escHtml(post.author)}</div><div class="post-time">${timeAgo(post.timestamp)}</div></div>
           <div class="post-menu-wrap" onclick="event.stopPropagation()">
             <button class="post-menu-btn" onclick="toggleMenu('${post.id}', event)">⋯</button>
             <div class="dropdown-menu" id="menu-${post.id}" style="display:none">
               <button class="dropdown-item" onclick="copyText('${post.id}')">📋 Copiar texto</button>
-              <button class="dropdown-item danger" onclick="deletePost('${post.id}')">🗑️ Eliminar</button>
+              ${canDelete ? `<button class="dropdown-item danger" onclick="deletePost('${post.id}')">🗑️ Eliminar</button>` : ''}
             </div>
           </div>
         </div>
-        <div class="post-body">
-          ${post.text ? `<p class="post-text">${escHtml(post.text)}</p>` : ''}
-          ${post.image ? `<img src="${post.image}" class="post-image" alt="Imagen del post" onclick="openModal(this.src)" loading="lazy" />` : ''}
-        </div>
+        <div class="post-body">${post.text ? `<p class="post-text">${escHtml(post.text)}</p>` : ''}${post.image ? `<img src="${post.image}" class="post-image" alt="Imagen del post" onclick="openModal(this.src)" loading="lazy" />` : ''}</div>
         <div class="post-actions">
-          <button id="likeBtn-${post.id}" class="action-btn${isLiked ? ' liked' : ''}" onclick="toggleLike('${post.id}')">
-            ${isLiked
-              ? `<svg width="16" height="16" viewBox="0 0 24 24"><path fill="#c8502a" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`
-              : `<svg width="16" height="16" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`
-            }
-            <span class="like-count" id="likeCnt-${post.id}">${post.likes > 0 ? post.likes : ''}</span>
-          </button>
-          <button class="action-btn" onclick="copyText('${post.id}')">
-            <svg width="16" height="16" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" d="M8 10h8M8 14h5m-9 7h14a2 2 0 002-2V5a2 2 0 00-2-2H6a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
-            Comentar
-          </button>
-          <button class="action-btn" onclick="sharePost('${post.id}')">
-            <svg width="16" height="16" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v13"/></svg>
-            Compartir
-          </button>
+          <button id="likeBtn-${post.id}" class="action-btn${isLiked ? ' liked' : ''}" onclick="toggleLike('${post.id}')">❤ <span class="like-count" id="likeCnt-${post.id}">${isLiked ? '1' : ''}</span></button>
+          <button class="action-btn" onclick="copyText('${post.id}')">Comentar</button>
+          <button class="action-btn" onclick="sharePost('${post.id}')">Compartir</button>
         </div>
       </article>`;
     }).join('');
   }
 
   function escHtml(str) {
-    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
-
   function copyText(id) {
-    const post = posts.find(p => p.id === id);
-    if (post && post.text) {
-      navigator.clipboard.writeText(post.text).then(() => showToast('Texto copiado'));
-    }
+    const post = posts.find(p => String(p.id) === String(id));
+    if (post?.text) navigator.clipboard.writeText(post.text).then(() => showToast('Texto copiado'));
     closeMenus();
   }
-
-  function sharePost(id) {
-    showToast('Enlace copiado al portapapeles (simulado)');
-  }
-
-  // ═══════════════════════════════════════════════
-  //  ESTADÍSTICAS
-  // ═══════════════════════════════════════════════
+  function sharePost() { showToast('Enlace copiado al portapapeles (simulado)'); }
 
   function updateStats() {
     const count = posts.length;
     const withImg = posts.filter(p => p.image).length;
-    const totalLikes = Object.keys(likes).length;
-
+    const totalLikes = Object.values(likes).filter(Boolean).length;
     document.getElementById('statPosts').textContent = count;
     document.getElementById('statWithImg').textContent = withImg;
     document.getElementById('statLikes').textContent = totalLikes;
     document.getElementById('headerCount').textContent = count + (count === 1 ? ' post' : ' posts');
   }
-
-  // ═══════════════════════════════════════════════
-  //  TOAST NOTIFICATION
-  // ═══════════════════════════════════════════════
 
   function showToast(msg) {
     const existing = document.querySelector('.toast');
@@ -1031,12 +1004,10 @@
     setTimeout(() => toast.remove(), 2600);
   }
 
-  // ═══════════════════════════════════════════════
-  //  INIT
-  // ═══════════════════════════════════════════════
-
-  renderFeed();
-  updateStats();
+  (async function init() {
+    await loadCurrentUser();
+    try { await refreshPosts(); } catch { showToast('No se pudo cargar /api/posts'); }
+  })();
 </script>
 </body>
 </html>
