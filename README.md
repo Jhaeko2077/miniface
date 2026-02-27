@@ -113,3 +113,7 @@ Configura estas variables en **Railway → Variables**:
 3. Haz deploy.
 4. Verifica `GET /health` y luego abre `/docs`.
 
+### Nota para Render sobre Python
+
+Este proyecto fija `PYTHON_VERSION=3.12.8` en `render.yaml` para evitar incompatibilidades temporales de dependencias con Python 3.14 durante el arranque.
+
