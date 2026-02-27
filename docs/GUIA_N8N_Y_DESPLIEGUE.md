@@ -30,16 +30,15 @@ La API expone este endpoint:
 
 - `X-N8N-KEY: <tu N8N_API_KEY>`
 
-### Body JSON
+### Body (form-data)
 
-```json
-{
-  "content": "Publicación automática desde n8n",
-  "author_email": "autor@tu-dominio.com"
-}
-```
+Campos:
 
-`author_email` es opcional **solo** si configuraste `N8N_DEFAULT_AUTHOR_EMAIL`.
+- `content` (obligatorio): texto del post.
+- `image` (opcional): archivo de imagen.
+- `author_email` (opcional): correo del autor; si no se envía, usa `N8N_DEFAULT_AUTHOR_EMAIL`.
+
+Este formato permite usar el botón de carga de archivo directamente en Swagger UI, igual que `POST /api/posts`.
 
 ### Respuesta esperada
 
@@ -60,9 +59,10 @@ Crea un workflow con estos nodos:
    - URL: `https://TU_API/api/automation/n8n/posts`
    - Send Headers:
      - `X-N8N-KEY`: `{{ $env.N8N_API_KEY }}` o valor fijo secreto
-   - Send Body: JSON
+   - Send Body: Form-Data
      - `content`: `{{ $json.content }}`
-     - `author_email`: `{{ $json.author_email }}`
+     - `author_email`: `{{ $json.author_email }}` (opcional)
+     - `image`: archivo binario (opcional)
 
 Activa el workflow y valida que retorne `201`.
 
@@ -95,12 +95,10 @@ Este repo incluye `render.yaml`, así que el despliegue es casi automático.
 
 ```bash
 curl -X POST "https://TU_API/api/automation/n8n/posts" \
-  -H "Content-Type: application/json" \
   -H "X-N8N-KEY: TU_N8N_API_KEY" \
-  -d '{
-    "content": "Hola desde una automatización",
-    "author_email": "autor@tu-dominio.com"
-  }'
+  -F "content=Hola desde una automatización" \
+  -F "author_email=autor@tu-dominio.com" \
+  -F "image=@/ruta/local/imagen.png"
 ```
 
 ---
