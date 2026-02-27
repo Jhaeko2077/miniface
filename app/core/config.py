@@ -1,3 +1,4 @@
+from pydantic import ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -16,4 +17,14 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
 
-settings = Settings()
+try:
+    settings = Settings()
+except ValidationError as exc:
+    missing_fields = ", ".join(error["loc"][0] for error in exc.errors())
+    raise RuntimeError(
+        "Faltan variables de entorno obligatorias para iniciar la API: "
+        f"{missing_fields}.\n"
+        "Pasos: 1) copia '.env.example' a '.env', "
+        "2) agrega DATABASE_URL y SECRET_KEY, "
+        "3) vuelve a ejecutar el servidor."
+    ) from exc
