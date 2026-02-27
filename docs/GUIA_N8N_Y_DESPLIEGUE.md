@@ -35,11 +35,14 @@ La API expone este endpoint:
 ```json
 {
   "content": "Publicación automática desde n8n",
-  "author_email": "autor@tu-dominio.com"
+  "author_email": "autor@tu-dominio.com",
+  "image_base64": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA...",
+  "image_filename": "post-n8n.png"
 }
 ```
 
 `author_email` es opcional **solo** si configuraste `N8N_DEFAULT_AUTHOR_EMAIL`.
+`image_base64` y `image_filename` son opcionales; si envías imagen en base64 se guardará igual que en los posts manuales.
 
 ### Respuesta esperada
 
@@ -63,6 +66,8 @@ Crea un workflow con estos nodos:
    - Send Body: JSON
      - `content`: `{{ $json.content }}`
      - `author_email`: `{{ $json.author_email }}`
+     - `image_base64`: `{{ $json.image_base64 }}` (opcional)
+     - `image_filename`: `{{ $json.image_filename }}` (opcional)
 
 Activa el workflow y valida que retorne `201`.
 
@@ -99,7 +104,9 @@ curl -X POST "https://TU_API/api/automation/n8n/posts" \
   -H "X-N8N-KEY: TU_N8N_API_KEY" \
   -d '{
     "content": "Hola desde una automatización",
-    "author_email": "autor@tu-dominio.com"
+    "author_email": "autor@tu-dominio.com",
+    "image_base64": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA...",
+    "image_filename": "hola-n8n.png"
   }'
 ```
 
