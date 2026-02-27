@@ -76,11 +76,14 @@ Este repo incluye `render.yaml`, así que el despliegue es casi automático.
 2. Entra a Render y crea un **New Web Service** conectado al repo.
 3. Render detectará `render.yaml`.
 4. En variables de entorno, completa:
+   - `PYTHON_VERSION=3.12.8`
    - `DATABASE_URL`
    - `SECRET_KEY`
    - `N8N_API_KEY`
    - `N8N_DEFAULT_AUTHOR_EMAIL` (opcional)
 5. Deploy.
+
+> Si no fijas la versión de Python, Render puede usar 3.14 por defecto y algunas combinaciones de dependencias pueden fallar al iniciar la app.
 
 ### Verificación
 
