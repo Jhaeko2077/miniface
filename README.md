@@ -43,7 +43,31 @@ no existe o está incompleto.
 uvicorn app.main:app --reload
 ```
 
-## 4) Endpoints
+## 4) Interfaz gráfica (`miniface.html`)
+
+Con esta versión, la interfaz ya se sirve desde FastAPI.
+
+1. Levanta el backend:
+   ```bash
+   uvicorn app.main:app --reload
+   ```
+2. Abre en tu navegador:
+   - `http://127.0.0.1:8000/`
+   - o `http://127.0.0.1:8000/miniface.html`
+3. En el panel izquierdo de la interfaz:
+   - Registra usuario (`email`, `username`, `password`).
+   - Inicia sesión (`email`, `password`).
+   - Publica texto o imagen (usa `/api/posts`).
+
+La UI consume estos endpoints del backend:
+- `POST /api/auth/register`
+- `POST /api/auth/token`
+- `GET /api/users/me`
+- `GET /api/posts`
+- `POST /api/posts`
+- `DELETE /api/posts/{post_id}`
+
+## 5) Endpoints
 
 - `GET /health`
 - `POST /api/auth/register`
@@ -57,13 +81,13 @@ Swagger:
 - `http://127.0.0.1:8000/docs`
 - Usa el botón **Authorize** y pega el email en `username` (estándar OAuth2).
 
-## 5) Notas sobre Supabase
+## 6) Notas sobre Supabase
 
 - Usa la **Connection string** del proyecto (Database → Connection string).
 - En producción evita usar el usuario `postgres` y rota credenciales periódicamente.
 - Este proyecto crea tablas al iniciar (`Base.metadata.create_all`). Para producción real, migra con Alembic.
 
-## 6) Deploy en Railway
+## 7) Deploy en Railway
 
 Este repositorio ya incluye configuración para Railway:
 
