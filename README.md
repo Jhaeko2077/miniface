@@ -27,6 +27,16 @@ cp .env.example .env
 
 Completa `.env` con la URL de conexión de Supabase y una `SECRET_KEY` segura.
 
+Ejemplo mínimo:
+
+```env
+DATABASE_URL=postgresql+psycopg2://postgres:tu_password@db.tu-proyecto.supabase.co:5432/postgres
+SECRET_KEY=pon_una_clave_larga_y_dificil
+```
+
+Si ves un error diciendo que faltan `database_url` o `secret_key`, significa que `.env`
+no existe o está incompleto.
+
 ## 3) Correr el servidor
 
 ```bash
