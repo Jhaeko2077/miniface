@@ -47,7 +47,7 @@ uvicorn app.main:app --reload
 
 - `GET /health`
 - `POST /api/auth/register`
-- `POST /api/auth/login`
+- `POST /api/auth/token` (OAuth2 Password Flow, form-data: `username`=email + `password`)
 - `GET /api/users/me` (Bearer token)
 - `POST /api/posts` (form-data: `content` + opcional `image`)
 - `GET /api/posts`
@@ -55,6 +55,7 @@ uvicorn app.main:app --reload
 Swagger:
 
 - `http://127.0.0.1:8000/docs`
+- Usa el botón **Authorize** y pega el email en `username` (estándar OAuth2).
 
 ## 5) Notas sobre Supabase
 
