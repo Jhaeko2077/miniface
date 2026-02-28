@@ -14,6 +14,14 @@ class N8NPostCreate(BaseModel):
         default=None,
         description="Alias común de Google Drive para exponer una imagen pública.",
     )
+    webViewLink: str | None = Field(
+        default=None,
+        description="URL de vista de Google Drive (/file/d/.../view).",
+    )
+    thumbnailLink: str | None = Field(
+        default=None,
+        description="Thumbnail de Google Drive (resolución baja).",
+    )
     image_base64: str | None = Field(
         default=None,
         description="Imagen en base64 (opcional). Puede ser base64 puro o data URL.",
