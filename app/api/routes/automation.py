@@ -3,6 +3,7 @@ import binascii
 import mimetypes
 import re
 from pathlib import Path
+from typing import Any
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
@@ -68,11 +69,8 @@ def _decode_base64_image(image_base64: str) -> tuple[bytes, str | None]:
         if ";base64" in header:
             mime_type = header[5:].split(";")[0] or None
 
-    # n8n puede introducir saltos de línea o espacios al serializar campos largos.
     raw_data = re.sub(r"\s+", "", raw_data)
-    # Algunos flujos entregan base64 URL-safe en lugar de base64 estándar.
     raw_data = raw_data.replace("-", "+").replace("_", "/")
-    # Normaliza padding faltante para evitar errores comunes en integraciones.
     raw_data += "=" * (-len(raw_data) % 4)
 
     try:
@@ -84,6 +82,67 @@ def _decode_base64_image(image_base64: str) -> tuple[bytes, str | None]:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="image_base64 is empty")
 
     return image_bytes, mime_type
+
+
+def _build_filename_from_binary_meta(binary_meta: dict[str, Any]) -> str | None:
+    file_name = binary_meta.get("fileName")
+    if isinstance(file_name, str) and file_name.strip():
+        return file_name.strip()
+
+    file_extension = binary_meta.get("fileExtension")
+    if isinstance(file_extension, str) and file_extension.strip():
+        normalized_ext = file_extension.strip().lstrip(".")
+        if normalized_ext:
+            return f"image.{normalized_ext}"
+
+    return None
+
+
+def _read_binary_from_n8n_filesystem(binary_id: str) -> bytes | None:
+    if not binary_id.startswith("filesystem-v2:"):
+        return None
+
+    path_fragment = binary_id.split(":", maxsplit=1)[1].lstrip("/")
+    if not path_fragment:
+        return None
+
+    candidate_paths: list[Path] = []
+
+    direct_path = Path(path_fragment)
+    candidate_paths.append(direct_path)
+
+    if settings.n8n_binary_data_root:
+        candidate_paths.append(Path(settings.n8n_binary_data_root) / path_fragment)
+
+    for file_path in candidate_paths:
+        if file_path.is_file():
+            return file_path.read_bytes()
+
+    return None
+
+
+def _extract_n8n_binary_image(binary_meta: dict[str, Any]) -> tuple[bytes, str | None, str | None]:
+    filename = _build_filename_from_binary_meta(binary_meta)
+    mime_type = binary_meta.get("mimeType") if isinstance(binary_meta.get("mimeType"), str) else None
+
+    data = binary_meta.get("data")
+    if isinstance(data, str) and data.strip():
+        image_bytes, detected_mime_type = _decode_base64_image(data)
+        return image_bytes, filename, mime_type or detected_mime_type
+
+    binary_id = binary_meta.get("id")
+    if isinstance(binary_id, str) and binary_id.strip():
+        image_bytes = _read_binary_from_n8n_filesystem(binary_id)
+        if image_bytes:
+            return image_bytes, filename, mime_type
+
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail=(
+            "image_binary no incluye datos utilizables. Envía image_binary.data en base64 "
+            "o configura N8N_BINARY_DATA_ROOT para poder leer image_binary.id (filesystem-v2)."
+        ),
+    )
 
 
 @router.post("/n8n/posts", response_model=PostOut, status_code=status.HTTP_201_CREATED)
@@ -112,6 +171,13 @@ async def create_post_from_n8n(
                 image_url = _save_binary_image(
                     image_bytes,
                     filename=parsed_payload.image_filename,
+                    mime_type=mime_type,
+                )
+            elif parsed_payload.image_binary:
+                image_bytes, filename, mime_type = _extract_n8n_binary_image(parsed_payload.image_binary)
+                image_url = _save_binary_image(
+                    image_bytes,
+                    filename=parsed_payload.image_filename or filename,
                     mime_type=mime_type,
                 )
 
