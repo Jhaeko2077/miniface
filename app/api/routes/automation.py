@@ -3,7 +3,9 @@ import binascii
 import mimetypes
 import re
 from pathlib import Path
+from urllib.error import URLError
 from urllib.parse import parse_qs, urlparse
+from urllib.request import Request as UrlRequest, urlopen
 from typing import Any
 from uuid import uuid4
 
@@ -29,8 +31,37 @@ def _normalize_external_image_url(value: str | None) -> str | None:
     if not normalized:
         return None
     if normalized.startswith(("http://", "https://")):
-        return _normalize_google_drive_url(normalized)
+        return _download_external_image(_normalize_google_drive_url(normalized))
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="image_url must be a valid http(s) URL")
+
+
+def _download_external_image(url: str) -> str:
+    request = UrlRequest(url, headers={"User-Agent": "miniface-bot/1.0"})
+
+    try:
+        with urlopen(request, timeout=20) as response:
+            mime_type = response.headers.get_content_type()
+            if not mime_type.startswith("image/"):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="image_url must point to an image",
+                )
+
+            image_bytes = response.read()
+    except HTTPException:
+        raise
+    except (URLError, TimeoutError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="image_url could not be fetched",
+        ) from exc
+
+    if not image_bytes:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="image_url is empty")
+
+    parsed_url = urlparse(url)
+    candidate_name = Path(parsed_url.path).name if parsed_url.path else None
+    return _save_binary_image(image_bytes, filename=candidate_name, mime_type=mime_type)
 
 
 def _extract_google_drive_file_id(parsed_url) -> str | None:
