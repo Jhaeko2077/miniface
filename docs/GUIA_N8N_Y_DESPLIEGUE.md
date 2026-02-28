@@ -70,6 +70,12 @@ Crea un workflow con estos nodos:
      - `image_base64`: `{{ $json.image_base64 }}` (opcional)
      - `image_filename`: `{{ $json.image_filename }}` (opcional)
 
+   > Si la imagen viene de una propiedad binaria de n8n, usa el campo `.data` (base64 puro), por ejemplo:
+   > - `image_base64`: `{{ $binary.imagen.data }}`
+   > - `image_filename`: `{{ $binary.imagen.fileName }}`
+   >
+   > No envíes el objeto binario completo (`{{ $binary.imagen }}`), solo su propiedad `data`.
+
    > Si quieres enviar archivo binario directo, también funciona `Form-Data`.
 
 Activa el workflow y valida que retorne `201`.

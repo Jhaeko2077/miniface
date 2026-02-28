@@ -1,6 +1,7 @@
 import base64
 import binascii
 import mimetypes
+import re
 from pathlib import Path
 from uuid import uuid4
 
@@ -66,6 +67,13 @@ def _decode_base64_image(image_base64: str) -> tuple[bytes, str | None]:
         raw_data = encoded
         if ";base64" in header:
             mime_type = header[5:].split(";")[0] or None
+
+    # n8n puede introducir saltos de línea o espacios al serializar campos largos.
+    raw_data = re.sub(r"\s+", "", raw_data)
+    # Algunos flujos entregan base64 URL-safe en lugar de base64 estándar.
+    raw_data = raw_data.replace("-", "+").replace("_", "/")
+    # Normaliza padding faltante para evitar errores comunes en integraciones.
+    raw_data += "=" * (-len(raw_data) % 4)
 
     try:
         image_bytes = base64.b64decode(raw_data, validate=True)
