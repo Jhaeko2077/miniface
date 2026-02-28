@@ -15,6 +15,7 @@ Define estas variables en tu entorno local y en producción:
 - `SECRET_KEY`
 - `N8N_API_KEY` (clave secreta que usará n8n en el header `X-N8N-KEY`)
 - `N8N_DEFAULT_AUTHOR_EMAIL` (opcional, correo del usuario que firmará publicaciones automáticas)
+- `N8N_BINARY_DATA_ROOT` (opcional, ruta local al storage de binarios de n8n cuando recibes `filesystem-v2:*`)
 
 > Recomendación: usa una clave larga en `N8N_API_KEY` (mínimo 32 caracteres).
 
@@ -44,6 +45,7 @@ Puedes enviar **uno de estos formatos**:
    - `author_email` (opcional): correo del autor.
    - `image_base64` (opcional): imagen en base64 (puro o data URL).
    - `image_filename` (opcional): nombre sugerido para extensión de archivo.
+   - `image_binary` (opcional): objeto binario de n8n (ej. `mimeType`, `fileName`, `fileExtension`, `id`, `data`).
 
 ### Respuesta esperada
 
@@ -77,6 +79,11 @@ Crea un workflow con estos nodos:
    > No envíes el objeto binario completo (`{{ $binary.imagen }}`), solo su propiedad `data`.
 
    > Si quieres enviar archivo binario directo, también funciona `Form-Data`.
+
+   > Si tu nodo devuelve solo metadatos como `{ mimeType, fileType, fileExtension, fileName, id, bytes }`,
+   > envía ese objeto en `image_binary`. La API intentará resolver la imagen así:
+   > 1) usando `image_binary.data` si viene en base64, o
+   > 2) leyendo `image_binary.id` (`filesystem-v2:*`) desde `N8N_BINARY_DATA_ROOT`.
 
 Activa el workflow y valida que retorne `201`.
 

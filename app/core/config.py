@@ -16,6 +16,7 @@ class Settings(BaseSettings):
 
     n8n_api_key: str | None = None
     n8n_default_author_email: str | None = None
+    n8n_binary_data_root: str | None = None
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
