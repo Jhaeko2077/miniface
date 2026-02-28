@@ -3,6 +3,7 @@ import binascii
 import mimetypes
 import re
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 from typing import Any
 from uuid import uuid4
 
@@ -28,8 +29,33 @@ def _normalize_external_image_url(value: str | None) -> str | None:
     if not normalized:
         return None
     if normalized.startswith(("http://", "https://")):
-        return normalized
+        return _normalize_google_drive_url(normalized)
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="image_url must be a valid http(s) URL")
+
+
+def _extract_google_drive_file_id(parsed_url) -> str | None:
+    query_id = parse_qs(parsed_url.query).get("id", [None])[0]
+    if query_id:
+        return query_id
+
+    match = re.search(r"/file/d/([^/]+)", parsed_url.path)
+    if match:
+        return match.group(1)
+
+    return None
+
+
+def _normalize_google_drive_url(url: str) -> str:
+    parsed_url = urlparse(url)
+    if parsed_url.netloc not in {"drive.google.com", "www.drive.google.com"}:
+        return url
+
+    file_id = _extract_google_drive_file_id(parsed_url)
+    if not file_id:
+        return url
+
+    # URL estable para renderizar imagen en <img> y evitar links tipo /file/d/.../view.
+    return f"https://drive.google.com/uc?export=view&id={file_id}"
 
 
 def _save_upload_image(image: UploadFile) -> str:
@@ -196,6 +222,8 @@ async def create_post_from_n8n(
                 image_url_value = _normalize_external_image_url(
                     parsed_payload.image_url
                     or parsed_payload.webContentLink
+                    or parsed_payload.webViewLink
+                    or parsed_payload.thumbnailLink
                     or raw_json.get("image")
                 )
 

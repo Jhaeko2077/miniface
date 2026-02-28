@@ -45,6 +45,8 @@ Puedes enviar **uno de estos formatos**:
    - `author_email` (opcional): correo del autor.
    - `image_url` (opcional): URL pública de imagen (ej. Google Drive).
    - `webContentLink` (opcional): alias de Google Drive para URL pública de imagen.
+   - `webViewLink` (opcional): enlace `/file/d/.../view` de Google Drive (la API lo convierte a URL directa).
+   - `thumbnailLink` (opcional): miniatura de Google Drive (se usa como respaldo).
    - `image_base64` (opcional): imagen en base64 (puro o data URL).
    - `image_filename` (opcional): nombre sugerido para extensión de archivo.
    - `image_binary` (opcional): objeto binario de n8n (ej. `mimeType`, `fileName`, `fileExtension`, `id`, `data`).
@@ -73,6 +75,8 @@ Crea un workflow con estos nodos:
      - `author_email`: `{{ $json.author_email }}` (opcional)
      - `image_url`: `{{ $json.image_url }}` (opcional)
      - `webContentLink`: `{{ $json.webContentLink }}` (opcional)
+     - `webViewLink`: `{{ $json.webViewLink }}` (opcional)
+     - `thumbnailLink`: `{{ $json.thumbnailLink }}` (opcional)
      - `image_base64`: `{{ $json.image_base64 }}` (opcional)
      - `image_filename`: `{{ $json.image_filename }}` (opcional)
 
