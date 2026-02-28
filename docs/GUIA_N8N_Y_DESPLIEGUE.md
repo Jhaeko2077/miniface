@@ -30,13 +30,20 @@ La API expone este endpoint:
 
 - `X-N8N-KEY: <tu N8N_API_KEY>`
 
-### Body `multipart/form-data`
+### Body soportado
 
-Campos:
+Puedes enviar **uno de estos formatos**:
 
-- `content` (requerido): texto del post.
-- `image` (opcional): archivo de imagen para subir desde interfaz gráfica (Swagger o n8n).
-- `author_email` (opcional): correo del autor si no usas `N8N_DEFAULT_AUTHOR_EMAIL`.
+1. `multipart/form-data`
+   - `content` (requerido): texto del post.
+   - `image` (opcional): archivo de imagen.
+   - `author_email` (opcional): correo del autor.
+
+2. `application/json`
+   - `content` (requerido): texto del post.
+   - `author_email` (opcional): correo del autor.
+   - `image_base64` (opcional): imagen en base64 (puro o data URL).
+   - `image_filename` (opcional): nombre sugerido para extensión de archivo.
 
 ### Respuesta esperada
 
@@ -57,10 +64,13 @@ Crea un workflow con estos nodos:
    - URL: `https://TU_API/api/automation/n8n/posts`
    - Send Headers:
      - `X-N8N-KEY`: `{{ $env.N8N_API_KEY }}` o valor fijo secreto
-   - Send Body: `Form-Data`
+   - Send Body: `JSON` (recomendado para evitar problemas de serialización)
      - `content`: `{{ $json.content }}`
      - `author_email`: `{{ $json.author_email }}` (opcional)
-     - `image`: archivo/binario (opcional)
+     - `image_base64`: `{{ $json.image_base64 }}` (opcional)
+     - `image_filename`: `{{ $json.image_filename }}` (opcional)
+
+   > Si quieres enviar archivo binario directo, también funciona `Form-Data`.
 
 Activa el workflow y valida que retorne `201`.
 
