@@ -21,6 +21,17 @@ from app.schemas.post import PostOut
 router = APIRouter(prefix="/automation", tags=["automation"])
 
 
+def _normalize_external_image_url(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip()
+    if not normalized:
+        return None
+    if normalized.startswith(("http://", "https://")):
+        return normalized
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="image_url must be a valid http(s) URL")
+
+
 def _save_upload_image(image: UploadFile) -> str:
     if not image.content_type or not image.content_type.startswith("image/"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File must be an image")
@@ -151,13 +162,14 @@ async def create_post_from_n8n(
     request: Request,
     content: str | None = Form(default=None, min_length=1, max_length=2000),
     image: UploadFile | None = File(default=None),
+    image_url: str | None = Form(default=None),
     author_email: str | None = Form(default=None),
     _: None = Depends(require_n8n_api_key),
     db: Session = Depends(get_db),
 ) -> Post:
     payload_content = content
     payload_author_email = author_email
-    image_url = _save_upload_image(image) if image else None
+    image_url_value = _save_upload_image(image) if image else _normalize_external_image_url(image_url)
 
     if payload_content is None:
         raw_json = await request.json() if request.headers.get("content-type", "").startswith("application/json") else {}
@@ -168,17 +180,23 @@ async def create_post_from_n8n(
 
             if parsed_payload.image_base64:
                 image_bytes, mime_type = _decode_base64_image(parsed_payload.image_base64)
-                image_url = _save_binary_image(
+                image_url_value = _save_binary_image(
                     image_bytes,
                     filename=parsed_payload.image_filename,
                     mime_type=mime_type,
                 )
             elif parsed_payload.image_binary:
                 image_bytes, filename, mime_type = _extract_n8n_binary_image(parsed_payload.image_binary)
-                image_url = _save_binary_image(
+                image_url_value = _save_binary_image(
                     image_bytes,
                     filename=parsed_payload.image_filename or filename,
                     mime_type=mime_type,
+                )
+            else:
+                image_url_value = _normalize_external_image_url(
+                    parsed_payload.image_url
+                    or parsed_payload.webContentLink
+                    or raw_json.get("image")
                 )
 
     if payload_content is None:
@@ -195,7 +213,7 @@ async def create_post_from_n8n(
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Author user not found")
 
-    post = Post(content=payload_content, image_url=image_url, owner_id=user.id)
+    post = Post(content=payload_content, image_url=image_url_value, owner_id=user.id)
     db.add(post)
     db.commit()
     db.refresh(post)
